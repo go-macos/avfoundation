@@ -10,7 +10,13 @@
 // CGO_ENABLED=0 — the constraint the fleet actually cares about is no cgo, not
 // no operating system.
 //
-// The model is a pull: [Open] a file and call [Reader.NextFrame] until it
+// There are two ways in, and they are not interchangeable. [Open] gives a
+// [Reader]: decode as fast as the hardware allows, in order, with no clock and
+// no sound — for transcoding, analysis, or a renderer that owns its own timing.
+// [OpenPlayer] gives a [Player]: AVPlayer's real-time playback, which brings
+// audio, pause, seeking, speed and volume, and which owns the clock itself.
+//
+// The Reader model is a pull: [Open] a file and call [Reader.NextFrame] until it
 // reports io.EOF. Frames come out as fast as they decode, carrying their
 // presentation timestamps, and the caller owns the clock. That is the right
 // shape for a renderer that has its own frame loop — an immersive viewer must
@@ -35,8 +41,8 @@ var (
 	ErrUnsupported = errors.New("avfoundation: unsupported on this platform (darwin only)")
 	// ErrNoVideoTrack is returned by [Open] for a file with no video in it.
 	ErrNoVideoTrack = errors.New("avfoundation: file has no video track")
-	// ErrClosed is returned when a Reader is used after [Reader.Close].
-	ErrClosed = errors.New("avfoundation: reader is closed")
+	// ErrClosed is returned when a Reader or Player is used after its Close.
+	ErrClosed = errors.New("avfoundation: reader or player is closed")
 	// ErrReleased is returned by [Frame] accessors after [Frame.Release].
 	ErrReleased = errors.New("avfoundation: frame has been released")
 	// ErrUnsupportedFormat is returned by [Open] for a pixel format the decoder
@@ -177,11 +183,25 @@ func (f *Frame) ToRGBA(dst *image.RGBA) *image.RGBA {
 	return dst
 }
 
-// Options parametrise [Open]. The zero value asks for BGRA, which is what the
-// decoder produces natively.
+// Options parametrise [Open] and [OpenPlayer]. The zero value asks for BGRA,
+// which is what the decoder produces natively.
 type Options struct {
 	// Format is the pixel format to decode into. Zero means [BGRA].
 	Format PixelFormat
+	// ReadyTimeout bounds how long [OpenPlayer] waits for a file to become
+	// playable before giving up. Zero means ten seconds. [Open] ignores it: an
+	// AVAssetReader is ready or it is not.
+	ReadyTimeout time.Duration
+}
+
+// readyTimeout resolves the load timeout, defaulting to ten seconds -- long
+// enough for a large file on a slow disk, short enough that a program which
+// will never become ready says so instead of hanging.
+func (o Options) readyTimeout() time.Duration {
+	if o.ReadyTimeout <= 0 {
+		return 10 * time.Second
+	}
+	return o.ReadyTimeout
 }
 
 // format resolves the requested format, defaulting to BGRA.

@@ -43,14 +43,18 @@ jobs:
         run: CGO_ENABLED=0 go test -count=1 -coverprofile=cover.out ./...
       - name: Race (CGO=1)
         run: CGO_ENABLED=1 go test -race -count=1 ./...
-      # The gate is on the PORTABLE file, not the total. The purego bindings
+      # The gate is on the PORTABLE files, not the total. The purego bindings
       # cannot be fully covered without media on the runner, and a total-coverage
       # gate would either be a lie or force a video file into the repository.
       - name: 100% coverage gate on the portable layer
         shell: bash
         run: |
-          go tool cover -func=cover.out | grep '/avfoundation.go:' > portable.txt
+          # Both build-tag-free files: the decoding API and the player's.
+          go tool cover -func=cover.out | grep -E '/(avfoundation|player)\.go:' > portable.txt
           cat portable.txt
+          if [ "$(wc -l < portable.txt)" -lt 2 ]; then
+            echo "::error::the coverage report named almost nothing; the grep is wrong"; exit 1
+          fi
           if grep -v '100.0%' portable.txt; then
             echo "::error::the portable layer is below 100% (lines above)"; exit 1
           fi
