@@ -56,10 +56,14 @@ hardware natively prefers (NV12 and friends) need a multi-plane `Frame` this
 package does not have yet; that is the path to a zero-conversion Metal pipeline.
 
 **No Matroska.** AVFoundation does not demux MKV or WebM: `Open` reports
-`ErrNoVideoTrack` for both. MP4, MOV and M4V work. For Matroska, demux with
-`go-avkit/avkit/container` (which does read EBML, and can recover a track's
-parameter sets from its samples) and feed the elementary stream to VideoToolbox
-directly — a separate job from this package.
+`ErrNoVideoTrack` for both. MP4, MOV and M4V work. That path exists elsewhere:
+demux with [`go-avkit/avkit/container`](https://github.com/go-avkit/avkit),
+which does read EBML, and decode with
+[`go-macos/videotoolbox`](https://github.com/go-macos/videotoolbox), which
+feeds the elementary stream to VideoToolbox directly and hands back the same
+zero-copy BGRA `Frame` this package does. Its `cmd/vtprobe` decodes a 1 h 32 MKV
+end to end, and its first ten frames of a control MP4 are byte-for-byte what
+`avprobe` produces here.
 
 ## `cmd/avprobe`
 
