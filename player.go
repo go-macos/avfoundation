@@ -82,7 +82,7 @@ func OpenPlayer(path string, opts ...Options) (*Player, error) {
 		// answer to an impossible pixel format is an opaque status code.
 		return nil, fmt.Errorf("%w: %v (only %v is decodable)", ErrUnsupportedFormat, format, BGRA)
 	}
-	b, info, err := newPlayerBackend(path, format, o.readyTimeout())
+	b, info, err := newPlayerBackend(path, o)
 	if err != nil {
 		return nil, err
 	}
@@ -265,4 +265,4 @@ type playerBackend interface {
 }
 
 // newPlayerBackend opens path and waits up to ready for it to become playable.
-var newPlayerBackend func(path string, f PixelFormat, ready time.Duration) (playerBackend, Info, error)
+var newPlayerBackend func(path string, opt Options) (playerBackend, Info, error)

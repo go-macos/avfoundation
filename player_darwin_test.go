@@ -458,3 +458,40 @@ func TestLiveLoadNeedsTheMainRunLoop(t *testing.T) {
 		}
 	}
 }
+
+// TestTheAudioDeviceCanBeNamed checks the one thing most likely to be wrong
+// about [Options.AudioDeviceUID]: the selector.
+//
+// A misspelled setter does not fail. Objective-C raises no error a Go caller
+// sees, the sound goes to the default output, and everything looks like it
+// worked -- which is the exact symptom this option exists to fix, so a test
+// that only set the option would pass while changing nothing. Reading the
+// property back is what separates the two.
+//
+// It needs no media: an AVPlayer with no item still holds the property.
+func TestTheAudioDeviceCanBeNamed(t *testing.T) {
+	if err := loadPlayer(); err != nil {
+		t.Skipf("AVFoundation is not available: %v", err)
+	}
+	objc.AutoreleasePool(func() {
+		p := objc.ClassID("AVPlayer").Send(objc.Sel("alloc")).Send(objc.Sel("init"))
+		if p == 0 {
+			t.Fatal("AVPlayer would not be created")
+		}
+		defer p.Send(objc.Sel("release"))
+
+		// The built-in speakers, whose unique id every Mac has.
+		const uid = "BuiltInSpeakerDevice"
+		p.Send(objc.Sel("setAudioOutputDeviceUniqueID:"), objc.NSString(uid))
+		got := objc.GoString(p.Send(objc.Sel("audioOutputDeviceUniqueID")))
+		if got != uid {
+			t.Fatalf("the player says its output is %q, want %q -- the selector does not name a real property", got, uid)
+		}
+		// And the negative control: with nothing named, nothing is claimed.
+		q := objc.ClassID("AVPlayer").Send(objc.Sel("alloc")).Send(objc.Sel("init"))
+		defer q.Send(objc.Sel("release"))
+		if unset := objc.GoString(q.Send(objc.Sel("audioOutputDeviceUniqueID"))); unset != "" {
+			t.Errorf("an untouched player already claims output %q, so the reading above proves nothing", unset)
+		}
+	})
+}
