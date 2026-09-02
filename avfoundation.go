@@ -188,6 +188,20 @@ func (f *Frame) ToRGBA(dst *image.RGBA) *image.RGBA {
 type Options struct {
 	// Format is the pixel format to decode into. Zero means [BGRA].
 	Format PixelFormat
+	// AudioDeviceUID names the audio device to play the sound on, as
+	// coreaudio reports it. Empty -- the default -- lets the system choose,
+	// which means the default output.
+	//
+	// It matters wherever the picture is not on the machine's own screen. A
+	// film played on a pair of XR glasses draws there and, with nothing named
+	// here, plays out of the Mac's speakers: no error, no warning, just sound
+	// coming from the wrong place. The unique id is the stable one -- it
+	// survives a reboot and a re-plug, and the numeric device ids do not.
+	//
+	// A device that does not exist is not an error either: AVFoundation falls
+	// back to the default output, so a caller that must KNOW where the sound
+	// went should look the device up first and say so.
+	AudioDeviceUID string
 	// ReadyTimeout bounds how long [OpenPlayer] waits for a file to become
 	// playable before giving up. Zero means ten seconds. [Open] ignores it: an
 	// AVAssetReader is ready or it is not.

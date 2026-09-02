@@ -42,7 +42,7 @@ func (f *fakeBackend) close() error         { f.closes++; return f.closeErr }
 
 // withPlayerSeam swaps the platform constructor for a fake and restores it
 // afterwards, so these tests run identically on darwin and everywhere else.
-func withPlayerSeam(t *testing.T, open func(string, PixelFormat, time.Duration) (playerBackend, Info, error)) {
+func withPlayerSeam(t *testing.T, open func(string, Options) (playerBackend, Info, error)) {
 	t.Helper()
 	prev := newPlayerBackend
 	t.Cleanup(func() { newPlayerBackend = prev })
@@ -53,7 +53,7 @@ func withPlayerSeam(t *testing.T, open func(string, PixelFormat, time.Duration) 
 func openFake(t *testing.T, info Info, opts ...Options) (*Player, *fakeBackend) {
 	t.Helper()
 	b := &fakeBackend{}
-	withPlayerSeam(t, func(string, PixelFormat, time.Duration) (playerBackend, Info, error) {
+	withPlayerSeam(t, func(string, Options) (playerBackend, Info, error) {
 		return b, info, nil
 	})
 	p, err := OpenPlayer("/x.mp4", opts...)
@@ -82,8 +82,8 @@ func TestOpenPlayerPassesFormatAndTimeout(t *testing.T) {
 		gotReady  time.Duration
 	)
 	info := Info{Width: 1280, Height: 720, FrameRate: 30, Duration: 258067 * time.Millisecond}
-	withPlayerSeam(t, func(path string, f PixelFormat, ready time.Duration) (playerBackend, Info, error) {
-		gotPath, gotFormat, gotReady = path, f, ready
+	withPlayerSeam(t, func(path string, o Options) (playerBackend, Info, error) {
+		gotPath, gotFormat, gotReady = path, o.format(), o.readyTimeout()
 		return &fakeBackend{}, info, nil
 	})
 
@@ -123,7 +123,7 @@ func TestOpenPlayerPassesFormatAndTimeout(t *testing.T) {
 
 func TestOpenPlayerRefusesUndecodableFormat(t *testing.T) {
 	asked := false
-	withPlayerSeam(t, func(string, PixelFormat, time.Duration) (playerBackend, Info, error) {
+	withPlayerSeam(t, func(string, Options) (playerBackend, Info, error) {
 		asked = true
 		return &fakeBackend{}, Info{}, nil
 	})
@@ -139,7 +139,7 @@ func TestOpenPlayerRefusesUndecodableFormat(t *testing.T) {
 
 func TestOpenPlayerPropagatesFailure(t *testing.T) {
 	sentinel := errors.New("item never loaded")
-	withPlayerSeam(t, func(string, PixelFormat, time.Duration) (playerBackend, Info, error) {
+	withPlayerSeam(t, func(string, Options) (playerBackend, Info, error) {
 		return nil, Info{}, sentinel
 	})
 	if _, err := OpenPlayer("/x.mp4"); !errors.Is(err, sentinel) {
@@ -369,5 +369,35 @@ func TestCloseReportsPlatformError(t *testing.T) {
 	b.closeErr = sentinel
 	if err := p.Close(); !errors.Is(err, sentinel) {
 		t.Errorf("Close = %v, want the platform error", err)
+	}
+}
+
+func TestTheAudioDeviceReachesThePlatform(t *testing.T) {
+	var got Options
+	withPlayerSeam(t, func(_ string, o Options) (playerBackend, Info, error) {
+		got = o
+		return &fakeBackend{}, Info{Width: 2, Height: 2}, nil
+	})
+	const uid = "AppleUSBAudioEngine:XREAL:XREAL 1S:1100000:6"
+	p, err := OpenPlayer("/film.mp4", Options{AudioDeviceUID: uid})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+	if got.AudioDeviceUID != uid {
+		t.Errorf("the platform was asked for output %q, want %q", got.AudioDeviceUID, uid)
+	}
+	// The default asks for nothing, which is what lets the system choose.
+	withPlayerSeam(t, func(_ string, o Options) (playerBackend, Info, error) {
+		got = o
+		return &fakeBackend{}, Info{Width: 2, Height: 2}, nil
+	})
+	q, err := OpenPlayer("/film.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer q.Close()
+	if got.AudioDeviceUID != "" {
+		t.Errorf("with no device asked for, the platform was told %q", got.AudioDeviceUID)
 	}
 }

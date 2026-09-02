@@ -99,7 +99,8 @@ func init() {
 
 // newDarwinPlayer builds the AVPlayer, its item and a video output, then waits
 // for the item to become playable.
-func newDarwinPlayer(path string, format PixelFormat, ready time.Duration) (playerBackend, Info, error) {
+func newDarwinPlayer(path string, opt Options) (playerBackend, Info, error) {
+	format, ready := opt.format(), opt.readyTimeout()
 	if err := loadPlayer(); err != nil {
 		return nil, Info{}, err
 	}
@@ -160,6 +161,12 @@ func newDarwinPlayer(path string, format PixelFormat, ready time.Duration) (play
 			output.Send(objc.Sel("release"))
 			oerr = &OpenError{Path: path, Stage: "AVPlayer playerWithPlayerItem:"}
 			return
+		}
+		if uid := opt.AudioDeviceUID; uid != "" {
+			// Where the sound goes. Without this it goes to the system default,
+			// which on a machine playing to a headset is the machine's own
+			// speakers -- silently, because nothing failed.
+			player.Send(objc.Sel("setAudioOutputDeviceUniqueID:"), objc.NSString(uid))
 		}
 		player.Send(objc.Sel("retain"))
 		item.Send(objc.Sel("retain"))
