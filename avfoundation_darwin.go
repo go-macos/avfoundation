@@ -108,8 +108,30 @@ func doLoad() error {
 	purego.RegisterLibFunc(&cvPixelBufferGetBytesPerRow, cv, "CVPixelBufferGetBytesPerRow")
 	purego.RegisterLibFunc(&cvPixelBufferGetWidth, cv, "CVPixelBufferGetWidth")
 	purego.RegisterLibFunc(&cvPixelBufferGetHeight, cv, "CVPixelBufferGetHeight")
+
+	// libSystem carries libdispatch. A camera output wants a SERIAL queue of its
+	// own to deliver frames on -- see OpenCamera.
+	ls, err := dlopen(libSystem)
+	if err != nil {
+		return err
+	}
+	purego.RegisterLibFunc(&dispatchQueueCreate, ls, "dispatch_queue_create")
+	purego.RegisterLibFunc(&dispatchRelease, ls, "dispatch_release")
+
+	purego.RegisterLibFunc(&cmVideoFormatDescriptionGetDimensions, cm,
+		"CMVideoFormatDescriptionGetDimensions")
+	purego.RegisterLibFunc(&cmFormatDescriptionGetMediaSubType, cm,
+		"CMFormatDescriptionGetMediaSubType")
 	return nil
 }
+
+// libSystem is where libdispatch lives.
+const libSystem = "/usr/lib/libSystem.B.dylib"
+
+var (
+	dispatchQueueCreate func(label string, attr uintptr) uintptr
+	dispatchRelease     func(uintptr)
+)
 
 // dlopen is a seam so a test can force doLoad's failure path.
 var dlopen = func(path string) (uintptr, error) {
@@ -283,4 +305,29 @@ func darwinClose(h handle) error {
 	dr.reader.Send(objc.Sel("release"))
 	dr.output, dr.reader = 0, 0
 	return nil
+}
+
+// cmVideoDimensions is CoreMedia's CMVideoDimensions: two 32-bit counts,
+// returned BY VALUE. Eight bytes, so it comes back in a register pair on both
+// architectures and purego marshals it without help.
+type videoDimensions struct{ width, height int32 }
+
+var (
+	cmVideoFormatDescriptionGetDimensions func(uintptr) videoDimensions
+	cmFormatDescriptionGetMediaSubType    func(uintptr) uint32
+)
+
+// cmVideoDimensions reads a format description's picture size.
+//
+// From the DESCRIPTION and not from any convenience property on the format: a
+// device's -formats each carry one, and the description is the authority. A
+// camera that reports 1920x1080 in its name and 1280x720 in its description is
+// delivering 1280x720.
+func cmVideoDimensions(desc objc.ID) videoDimensions {
+	return cmVideoFormatDescriptionGetDimensions(uintptr(desc))
+}
+
+// cmMediaSubType is the four-character code the device delivers in this format.
+func cmMediaSubType(desc objc.ID) uint32 {
+	return cmFormatDescriptionGetMediaSubType(uintptr(desc))
 }
