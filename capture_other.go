@@ -19,3 +19,10 @@ func Cameras() ([]Camera, error) { return nil, ErrUnsupported }
 
 func (c *capture) latest() (*Frame, bool) { return nil, false }
 func (c *capture) close() error           { return ErrUnsupported }
+
+// CameraAuthorization reports [CameraNotDetermined] away from macOS.
+//
+// Not "denied": nothing has refused anything. There is no camera to ask about
+// and no decision to report, and calling that a refusal would send a caller
+// looking for a setting to change.
+func CameraAuthorization() CameraAccess { return CameraNotDetermined }

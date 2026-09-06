@@ -123,16 +123,59 @@ func names(all []Camera) string {
 	return out
 }
 
-// authorization is what this Mac has decided about the camera, in the order
-// AVAuthorizationStatus uses.
-type authorization int
+// CameraAccess is what this Mac has already decided about the camera, in the
+// order AVAuthorizationStatus uses.
+//
+// ⭐ ASKING FOR IT DOES NOT PROMPT AND DOES NOT LIGHT THE CAMERA.
+// -[AVCaptureDevice authorizationStatusForMediaType:] reports a decision that
+// has already been made, or not made; it is -requestAccessForMediaType: and
+// starting a session that put a dialog on somebody's screen. That difference is
+// the whole reason this is exported: a program can say "the camera has not been
+// granted" in a start-up report without being the program that asks.
+//
+// ⛔ AND WITHOUT IT, A REFUSED CAMERA IS INDISTINGUISHABLE FROM A MISSING
+// FEATURE. go-xrkit/desk's passthrough did nothing at all, and the desk had no
+// way to say why: it reported the grants it could ask about and left the camera
+// out, on the belief that asking meant opening. It does not.
+type CameraAccess int
 
 const (
-	authNotDetermined authorization = 0
-	authRestricted    authorization = 1
-	authDenied        authorization = 2
-	authAuthorized    authorization = 3
+	// CameraNotDetermined means nobody has been asked yet. Opening a camera is
+	// what asks them, and macOS puts its own prompt up: this is not a refusal.
+	CameraNotDetermined CameraAccess = 0
+	// CameraRestricted means a policy forbids it and the person cannot change
+	// that. Telling them to visit Privacy & Security is the same advice with
+	// one more sentence they cannot act on.
+	CameraRestricted CameraAccess = 1
+	// CameraDenied means the person has said no, here or in System Settings.
+	CameraDenied CameraAccess = 2
+	// CameraAuthorized means a camera can be opened with nothing happening
+	// first.
+	CameraAuthorized CameraAccess = 3
 )
+
+// String is what the state is called, in a sentence somebody reads.
+func (a CameraAccess) String() string {
+	switch a {
+	case CameraNotDetermined:
+		return "not asked yet"
+	case CameraRestricted:
+		return "forbidden by a policy on this Mac"
+	case CameraDenied:
+		return "refused"
+	case CameraAuthorized:
+		return "granted"
+	default:
+		return "unknown"
+	}
+}
+
+// Granted reports whether a camera can be opened with nothing happening first.
+//
+// ⚠ NOT-DETERMINED IS NOT GRANTED, and that is the useful answer for a report:
+// the camera will work, after a prompt somebody has to answer. A report that
+// called that granted would be describing a state that does not exist yet.
+func (a CameraAccess) Granted() bool { return a == CameraAuthorized }
 
 // errorFor turns a status into the refusal a caller should see, or nil when
 // there is nothing to refuse.
@@ -140,17 +183,17 @@ const (
 // Restricted is reported as denied on purpose: it is a Mac under a policy the
 // person cannot change, and telling them to visit Privacy & Security is the
 // same advice with one more sentence they cannot act on.
-func errorFor(a authorization) error {
+func errorFor(a CameraAccess) error {
 	switch a {
-	case authAuthorized:
+	case CameraAuthorized:
 		return nil
-	case authNotDetermined:
+	case CameraNotDetermined:
 		// Nobody has been asked. Starting the session is what asks them, and
 		// macOS puts its own prompt up -- so this is not a refusal.
 		return nil
-	case authDenied:
+	case CameraDenied:
 		return ErrCameraDenied
-	case authRestricted:
+	case CameraRestricted:
 		return fmt.Errorf("%w: this Mac is under a policy that forbids it", ErrCameraDenied)
 	default:
 		return fmt.Errorf("%w: this Mac answered %d, which this package does not know",

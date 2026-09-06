@@ -95,7 +95,7 @@ func TestOnDeviceTheUsageDescriptionIsReadFromTheBundle(t *testing.T) {
 func TestOnDeviceTheAuthorizationStatusIsOneOfTheFour(t *testing.T) {
 	got := cameraAuthorization()
 	switch got {
-	case authNotDetermined, authRestricted, authDenied, authAuthorized:
+	case CameraNotDetermined, CameraRestricted, CameraDenied, CameraAuthorized:
 		t.Logf("this Mac's camera authorization is %d", int(got))
 	default:
 		t.Errorf("authorizationStatusForMediaType: answered %d", int(got))

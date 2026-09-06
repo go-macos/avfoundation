@@ -65,13 +65,13 @@ func TestNamingNothingTakesTheFirst(t *testing.T) {
 // instant something wants it. Refusing here would mean this package raised the
 // prompt itself, which needs an Objective-C block.
 func TestWhatEachAnswerFromTCCMeans(t *testing.T) {
-	if err := errorFor(authAuthorized); err != nil {
+	if err := errorFor(CameraAuthorized); err != nil {
 		t.Errorf("an authorised camera was refused: %v", err)
 	}
-	if err := errorFor(authNotDetermined); err != nil {
+	if err := errorFor(CameraNotDetermined); err != nil {
 		t.Errorf("a camera nobody has been asked about was refused: %v", err)
 	}
-	for _, a := range []authorization{authDenied, authRestricted, authorization(99)} {
+	for _, a := range []CameraAccess{CameraDenied, CameraRestricted, CameraAccess(99)} {
 		err := errorFor(a)
 		if !errors.Is(err, ErrCameraDenied) {
 			t.Errorf("status %d gave %v, want ErrCameraDenied", int(a), err)
@@ -79,12 +79,12 @@ func TestWhatEachAnswerFromTCCMeans(t *testing.T) {
 	}
 	// Restricted says WHY it is different, because "denied" on a managed Mac
 	// sends a person to a setting they cannot change.
-	if got := errorFor(authRestricted).Error(); !strings.Contains(got, "policy") {
+	if got := errorFor(CameraRestricted).Error(); !strings.Contains(got, "policy") {
 		t.Errorf("restricted reads as %q", got)
 	}
 	// And an answer this package does not know reports the number rather than
 	// pretending it is one of the four: a new macOS may add one.
-	if got := errorFor(authorization(99)).Error(); !strings.Contains(got, "99") {
+	if got := errorFor(CameraAccess(99)).Error(); !strings.Contains(got, "99") {
 		t.Errorf("an unknown status reads as %q", got)
 	}
 }
