@@ -349,8 +349,22 @@ func hasCameraUsageDescription() bool {
 }
 
 // cameraAuthorization is what this Mac has already decided.
-func cameraAuthorization() authorization {
-	return authorization(objc.Send[int64](
+func cameraAuthorization() CameraAccess {
+	return CameraAccess(objc.Send[int64](
 		objc.ClassID("AVCaptureDevice"),
 		objc.Sel("authorizationStatusForMediaType:"), objc.NSString("vide")))
+}
+
+// CameraAuthorization is what this Mac has already decided about the camera.
+//
+// ⭐ IT ASKS WITHOUT ASKING: no prompt, no light, nothing on anybody's screen.
+// See [CameraAccess] for why that distinction is the whole point.
+//
+// It reports [CameraNotDetermined] where AVFoundation cannot be reached at all,
+// which is the same thing it means: nothing has been decided.
+func CameraAuthorization() CameraAccess {
+	if err := load(); err != nil {
+		return CameraNotDetermined
+	}
+	return cameraAuthorization()
 }
